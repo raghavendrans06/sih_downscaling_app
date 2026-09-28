@@ -1,0 +1,5 @@
+id,name,lat,lon,elevation,slope,ndvi
+P01,North Hill,26.18,91.75,650,22,0.72
+P02,Central Valley,26.15,91.77,120,4,0.45
+P03,South Plains,26.10,91.80,70,2,0.55
+P04,East Ridge,26.14,91.85,480,18,0.68

@@ -1,10 +1,8 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import folium
 
 from streamlit_folium import st_folium
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 from backend.downscaler import WeatherDownscaler
 from weather_api import get_block_weather
@@ -17,230 +15,30 @@ from weather_api import get_block_weather
 st.set_page_config(
     page_title="SIH26074 Weather Downscaling",
     page_icon="🌦️",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="wide"
 )
 
 
 # ============================================================
-# CSS
+# MAIN TITLE
 # ============================================================
 
-st.markdown("""
-<style>
+st.title("🌦️ SIH26074 Weather Downscaling")
 
-.stApp {
-    background: linear-gradient(
-        135deg,
-        #f0f9ff 0%,
-        #ecfeff 50%,
-        #f0fdf4 100%
-    );
-}
+st.subheader(
+    "🌾 Block-Level to Panchayat-Level "
+    "Agro-Meteorological Advisory"
+)
 
-.main .block-container {
-    padding-top: 2rem;
-    padding-bottom: 3rem;
-    max-width: 1500px;
-}
-
-
-/* SIDEBAR */
-
-[data-testid="stSidebar"] {
-    background: linear-gradient(
-        180deg,
-        #064e3b 0%,
-        #075985 100%
-    );
-}
-
-[data-testid="stSidebar"] * {
-    color: white !important;
-}
-
-[data-testid="stSidebar"] input {
-    background-color: white !important;
-    color: #111827 !important;
-}
-
-[data-testid="stSidebar"] label {
-    color: white !important;
-    font-weight: 600 !important;
-}
-
-[data-testid="stSidebar"] .stButton button {
-    background: #0284c7 !important;
-    color: white !important;
-    border: none !important;
-    border-radius: 10px !important;
-    font-weight: 700 !important;
-    min-height: 48px;
-}
-
-
-/* TITLE */
-
-.main-title {
-    font-size: 42px;
-    font-weight: 800;
-    color: #075985;
-    line-height: 1.15;
-}
-
-.main-subtitle {
-    font-size: 18px;
-    color: #334155;
-    margin-top: 8px;
-}
-
-.main-description {
-    font-size: 14px;
-    color: #64748b;
-    margin-top: 6px;
-}
-
-
-/* INFO */
-
-.info-banner {
-    background: #dbeafe;
-    border-left: 5px solid #0284c7;
-    padding: 15px 20px;
-    border-radius: 10px;
-    color: #075985;
-    margin-top: 25px;
-    margin-bottom: 30px;
-}
-
-
-/* SECTION */
-
-.section-title {
-    color: #064e3b;
-    font-size: 28px;
-    font-weight: 800;
-    margin-top: 30px;
-    margin-bottom: 18px;
-}
-
-
-/* WORKFLOW */
-
-.workflow-card {
-    background: white;
-    border: 1px solid #d1fae5;
-    border-radius: 16px;
-    padding: 25px 10px;
-    text-align: center;
-    min-height: 135px;
-    box-shadow: 0 5px 18px rgba(15, 23, 42, 0.06);
-}
-
-.workflow-card .icon {
-    font-size: 32px;
-    margin-bottom: 8px;
-}
-
-.workflow-card .title {
-    font-size: 16px;
-    font-weight: 700;
-    color: #0f172a;
-}
-
-.workflow-card .text {
-    font-size: 13px;
-    color: #64748b;
-    margin-top: 6px;
-}
-
-
-/* EMPTY STATE */
-
-.empty-card {
-    background: white;
-    border: 1px solid #dbeafe;
-    border-radius: 15px;
-    padding: 30px;
-    text-align: center;
-    margin-top: 25px;
-}
-
-
-/* FOOTER */
-
-.footer {
-    text-align: center;
-    color: #64748b;
-    font-size: 13px;
-    padding-top: 35px;
-    padding-bottom: 15px;
-}
-
-</style>
-""", unsafe_allow_html=True)
+st.write(
+    "Downscale block-level weather forecasts to "
+    "Panchayat-level forecasts using machine learning "
+    "and local geographical features."
+)
 
 
 # ============================================================
-# PANCHAYAT DATA
-# ============================================================
-
-DEFAULT_PANCHAYATS = [
-    {
-        "id": "P01",
-        "name": "North Hill",
-        "lat": 26.18,
-        "lon": 91.75,
-        "elevation": 650,
-        "slope": 22,
-        "ndvi": 0.72
-    },
-    {
-        "id": "P02",
-        "name": "Central Valley",
-        "lat": 26.15,
-        "lon": 91.77,
-        "elevation": 120,
-        "slope": 4,
-        "ndvi": 0.45
-    },
-    {
-        "id": "P03",
-        "name": "South Plains",
-        "lat": 26.10,
-        "lon": 91.80,
-        "elevation": 70,
-        "slope": 2,
-        "ndvi": 0.55
-    },
-    {
-        "id": "P04",
-        "name": "East Ridge",
-        "lat": 26.14,
-        "lon": 91.85,
-        "elevation": 480,
-        "slope": 18,
-        "ndvi": 0.68
-    }
-]
-
-
-# ============================================================
-# SESSION STATE
-# ============================================================
-
-if "weather" not in st.session_state:
-    st.session_state.weather = None
-
-if "forecasts" not in st.session_state:
-    st.session_state.forecasts = None
-
-if "panchayats" not in st.session_state:
-    st.session_state.panchayats = DEFAULT_PANCHAYATS
-
-
-# ============================================================
-# LOAD MODEL
+# LOAD ML MODEL
 # ============================================================
 
 @st.cache_resource
@@ -248,943 +46,850 @@ def load_model():
     return WeatherDownscaler()
 
 
-try:
-    engine = load_model()
-    model_loaded = True
-except Exception as e:
-    engine = None
-    model_loaded = False
-    st.error(f"❌ Model loading failed: {e}")
+engine = load_model()
 
 
 # ============================================================
-# SIDEBAR
+# LOAD PANCHAYAT CSV
 # ============================================================
 
-with st.sidebar:
+PANCHAYAT_FILE = "panchayats.csv"
 
-    # Simple HTML only — no nested divs
-    st.markdown("""
-    <div style="
-        background: rgba(255,255,255,0.12);
-        padding: 20px;
-        border-radius: 14px;
-        text-align: center;
-        margin-bottom: 25px;
-        color: white;
-    ">
-        🌦️<br>
-        <b style="font-size:24px;">SIH26074</b><br>
-        <span style="font-size:13px;">
-            Weather Downscaling Prototype
-        </span>
-    </div>
-    """, unsafe_allow_html=True)
 
-    st.markdown("### ⚙️ Forecast Configuration")
+@st.cache_data
+def load_panchayats():
 
-    st.markdown("#### 📍 Block Location")
+    df = pd.read_csv(PANCHAYAT_FILE)
 
-    block_lat = st.number_input(
-        "Latitude",
-        value=26.15000,
-        format="%.5f"
-    )
-
-    block_lon = st.number_input(
-        "Longitude",
-        value=91.77000,
-        format="%.5f"
-    )
-
-    st.markdown("#### 🗺️ Panchayat Data")
-
-    uploaded_panchayats = st.file_uploader(
-        "Upload Panchayat CSV",
-        type=["csv"],
-        help="Required: id, name, lat, lon, elevation, slope, ndvi"
-    )
-
-    if uploaded_panchayats is not None:
-
-        try:
-
-            uploaded_df = pd.read_csv(
-                uploaded_panchayats
-            )
-
-            required = [
-                "id",
-                "name",
-                "lat",
-                "lon",
-                "elevation",
-                "slope",
-                "ndvi"
-            ]
-
-            missing = [
-                col for col in required
-                if col not in uploaded_df.columns
-            ]
-
-            if missing:
-
-                st.error(
-                    "Missing columns: "
-                    + ", ".join(missing)
-                )
-
-            else:
-
-                st.session_state.panchayats = (
-                    uploaded_df[required].to_dict("records")
-                )
-
-                st.success(
-                    f"Loaded {len(uploaded_df)} Panchayats"
-                )
-
-        except Exception as e:
-
-            st.error(f"CSV error: {e}")
-
-
-    panchayats = st.session_state.panchayats
-
-    st.markdown("#### 🚀 Run Prediction")
-
-    generate_button = st.button(
-        "🌐 Get Live Weather & Generate Forecast",
-        use_container_width=True
-    )
-
-    if generate_button:
-
-        if not model_loaded:
-
-            st.error("ML model is not available.")
-
-        else:
-
-            try:
-
-                with st.spinner(
-                    "🌐 Fetching live weather..."
-                ):
-
-                    weather = get_block_weather(
-                        block_lat,
-                        block_lon
-                    )
-
-                st.session_state.weather = weather
-
-                coarse_temp = float(
-                    weather["current"]["temperature_2m"]
-                )
-
-                coarse_rain = float(
-                    weather["current"].get(
-                        "rain",
-                        0
-                    ) or 0
-                )
-
-                with st.spinner(
-                    "🤖 Generating Panchayat-level forecasts..."
-                ):
-
-                    forecasts = engine.downscale(
-                        coarse_temp=coarse_temp,
-                        coarse_rain=coarse_rain,
-                        panchayat_features=panchayats
-                    )
-
-                st.session_state.forecasts = forecasts
-
-                st.success(
-                    "✅ Forecast generated successfully!"
-                )
-
-            except Exception as e:
-
-                st.error(
-                    f"❌ Error: {e}"
-                )
-
-
-# ============================================================
-# MAIN HEADER
-# ============================================================
-
-st.markdown("""
-<div class="main-title">
-🌦️ SIH26074 Weather Downscaling
-</div>
-
-<div class="main-subtitle">
-🌱 Panchayat-Level Agro-Meteorological Intelligence
-</div>
-
-<div class="main-description">
-Transforming block-level weather forecasts into localized
-Panchayat-level agricultural insights.
-</div>
-""", unsafe_allow_html=True)
-
-
-# ============================================================
-# INFO
-# ============================================================
-
-if st.session_state.forecasts is None:
-
-    st.markdown("""
-    <div class="info-banner">
-    👉 Click <b>Get Live Weather & Generate Forecast</b>
-    from the sidebar to start the prediction pipeline.
-    </div>
-    """, unsafe_allow_html=True)
-
-
-# ============================================================
-# WORKFLOW
-# ============================================================
-
-st.markdown(
-    '<div class="section-title">🔄 How the Prototype Works</div>',
-    unsafe_allow_html=True
-)
-
-workflow = [
-    ("🌐", "Live Weather", "Current forecast"),
-    ("📦", "Block Data", "Coarse forecast"),
-    ("🤖", "ML Model", "Downscaling"),
-    ("📍", "Panchayat", "Localized forecast"),
-    ("🌾", "Advisory", "Farmer insights")
-]
-
-cols = st.columns(5)
-
-for col, data in zip(cols, workflow):
-
-    icon, title, description = data
-
-    with col:
-
-        # IMPORTANT:
-        # No nested divs.
-        st.markdown(
-            f"""
-            <div class="workflow-card">
-            <span class="icon">{icon}</span><br>
-            <span class="title">{title}</span><br>
-            <span class="text">{description}</span>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-
-# ============================================================
-# CHECK FORECAST
-# ============================================================
-
-weather = st.session_state.weather
-forecasts = st.session_state.forecasts
-
-if weather is None or forecasts is None:
-
-    st.markdown("""
-    <div class="empty-card">
-    <h2>🌦️</h2>
-    <h3>Ready to Generate a Forecast</h3>
-    <p>
-    Enter the block location in the sidebar and click
-    the forecast button.
-    </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.stop()
-
-
-# ============================================================
-# LIVE WEATHER
-# ============================================================
-
-st.markdown(
-    '<div class="section-title">🌐 Live Block Weather</div>',
-    unsafe_allow_html=True
-)
-
-current = weather["current"]
-
-current_temp = float(
-    current.get("temperature_2m", 0)
-)
-
-current_rain = float(
-    current.get("rain", 0) or 0
-)
-
-current_precip = float(
-    current.get("precipitation", 0) or 0
-)
-
-cols = st.columns(4)
-
-with cols[0]:
-    st.metric(
-        "🌡️ Temperature",
-        f"{current_temp:.1f} °C"
-    )
-
-with cols[1]:
-    st.metric(
-        "🌧️ Rain",
-        f"{current_rain:.1f} mm"
-    )
-
-with cols[2]:
-    st.metric(
-        "💧 Precipitation",
-        f"{current_precip:.1f} mm"
-    )
-
-with cols[3]:
-    st.metric(
-        "📍 Panchayats",
-        len(panchayats)
-    )
-
-
-# ============================================================
-# FORECAST DATAFRAME
-# ============================================================
-
-forecast_df = pd.DataFrame(
-    forecasts
-)
-
-feature_df = pd.DataFrame(
-    panchayats
-)[
-    [
-        "id",
-        "elevation",
-        "slope",
-        "ndvi"
-    ]
-]
-
-forecast_df = forecast_df.merge(
-    feature_df,
-    on="id",
-    how="left",
-    suffixes=("", "_feature")
-)
-
-if "elevation_feature" in forecast_df.columns:
-
-    forecast_df["elevation"] = (
-        forecast_df["elevation"]
-        .fillna(
-            forecast_df["elevation_feature"]
-        )
-    )
-
-    forecast_df.drop(
-        columns=["elevation_feature"],
-        inplace=True
-    )
-
-
-# ============================================================
-# RISK
-# ============================================================
-
-def get_risk(temp, rain):
-
-    if rain > 35:
-        return "🔴 Heavy Rainfall"
-
-    if temp > 36:
-        return "🔴 Heat Stress"
-
-    if rain > 15 and temp > 30:
-        return "🟠 Fungal Disease"
-
-    if rain > 10:
-        return "🟡 Moderate Rain"
-
-    return "🟢 Low Risk"
-
-
-forecast_df["risk"] = forecast_df.apply(
-    lambda row: get_risk(
-        row["downscaled_temp"],
-        row["downscaled_rain"]
-    ),
-    axis=1
-)
-
-
-# ============================================================
-# SUMMARY
-# ============================================================
-
-st.markdown(
-    '<div class="section-title">📊 Panchayat Forecast Summary</div>',
-    unsafe_allow_html=True
-)
-
-cols = st.columns(4)
-
-with cols[0]:
-    st.metric(
-        "🌡️ Avg Temperature",
-        f"{forecast_df.downscaled_temp.mean():.1f} °C"
-    )
-
-with cols[1]:
-    st.metric(
-        "🌧️ Avg Rainfall",
-        f"{forecast_df.downscaled_rain.mean():.1f} mm"
-    )
-
-with cols[2]:
-    st.metric(
-        "🔥 Max Temperature",
-        f"{forecast_df.downscaled_temp.max():.1f} °C"
-    )
-
-with cols[3]:
-    st.metric(
-        "🌧️ Max Rainfall",
-        f"{forecast_df.downscaled_rain.max():.1f} mm"
-    )
-
-
-# ============================================================
-# MAP
-# ============================================================
-
-st.markdown(
-    '<div class="section-title">🗺️ Panchayat-Level Forecast Map</div>',
-    unsafe_allow_html=True
-)
-
-map_center = [
-    forecast_df.lat.mean(),
-    forecast_df.lon.mean()
-]
-
-m = folium.Map(
-    location=map_center,
-    zoom_start=11,
-    tiles="OpenStreetMap"
-)
-
-for _, row in forecast_df.iterrows():
-
-    if (
-        "Heavy" in row.risk
-        or "Heat" in row.risk
-    ):
-        marker_color = "red"
-
-    elif (
-        "Fungal" in row.risk
-        or "Moderate" in row.risk
-    ):
-        marker_color = "orange"
-
-    else:
-        marker_color = "green"
-
-
-    popup_html = f"""
-    <div style="width:260px;font-family:Arial;">
-
-    <h4 style="color:#075985;">
-    📍 {row['name']}
-    </h4>
-
-    <hr>
-
-    <b>🌡️ Temperature:</b>
-    {row['downscaled_temp']:.2f} °C
-    <br>
-
-    <b>🌧️ Rainfall:</b>
-    {row['downscaled_rain']:.2f} mm
-    <br>
-
-    <b>⛰️ Elevation:</b>
-    {row['elevation']:.0f} m
-    <br>
-
-    <b>📐 Slope:</b>
-    {row['slope']:.1f}°
-    <br>
-
-    <b>🌱 NDVI:</b>
-    {row['ndvi']:.2f}
-    <br>
-
-    <b>⚠️ Risk:</b>
-    {row['risk']}
-
-    <br><br>
-
-    <b>🌾 Advisory:</b>
-    <br>
-
-    {row['advisory']}
-
-    </div>
-    """
-
-    folium.Marker(
-        location=[
-            row["lat"],
-            row["lon"]
-        ],
-        tooltip=row["name"],
-        popup=folium.Popup(
-            popup_html,
-            max_width=320
-        ),
-        icon=folium.Icon(
-            color=marker_color,
-            icon="cloud"
-        )
-    ).add_to(m)
-
-
-st_folium(
-    m,
-    height=550,
-    width=None
-)
-
-
-# ============================================================
-# PANCHAYAT DETAILS
-# ============================================================
-
-st.markdown(
-    '<div class="section-title">📍 Panchayat-Level Insights</div>',
-    unsafe_allow_html=True
-)
-
-for _, row in forecast_df.iterrows():
-
-    with st.expander(
-        f"📍 {row['name']} — {row['risk']}"
-    ):
-
-        cols = st.columns(4)
-
-        with cols[0]:
-            st.metric(
-                "Temperature",
-                f"{row['downscaled_temp']:.2f} °C"
-            )
-
-        with cols[1]:
-            st.metric(
-                "Rainfall",
-                f"{row['downscaled_rain']:.2f} mm"
-            )
-
-        with cols[2]:
-            st.metric(
-                "Elevation",
-                f"{row['elevation']:.0f} m"
-            )
-
-        with cols[3]:
-            st.metric(
-                "NDVI",
-                f"{row['ndvi']:.2f}"
-            )
-
-        st.write(
-            f"**📐 Slope:** {row['slope']:.1f}°"
-        )
-
-        st.write(
-            f"**⚠️ Risk:** {row['risk']}"
-        )
-
-        st.info(
-            f"🌾 **Agricultural Advisory:** "
-            f"{row['advisory']}"
-        )
-
-
-# ============================================================
-# TABLE
-# ============================================================
-
-st.markdown(
-    '<div class="section-title">📋 Forecast Data Table</div>',
-    unsafe_allow_html=True
-)
-
-display_df = forecast_df[
-    [
+    required_columns = [
         "id",
         "name",
         "lat",
         "lon",
         "elevation",
         "slope",
-        "ndvi",
-        "downscaled_temp",
-        "downscaled_rain",
-        "risk",
-        "advisory"
+        "ndvi"
     ]
-].copy()
 
-display_df.columns = [
-    "ID",
-    "Panchayat",
-    "Latitude",
-    "Longitude",
-    "Elevation (m)",
-    "Slope (°)",
-    "NDVI",
-    "Temperature (°C)",
-    "Rainfall (mm)",
-    "Risk",
-    "Advisory"
-]
+    missing_columns = [
+        column
+        for column in required_columns
+        if column not in df.columns
+    ]
+
+    if missing_columns:
+
+        raise ValueError(
+            "Missing columns in panchayats.csv: "
+            + ", ".join(missing_columns)
+        )
+
+    if df.empty:
+
+        raise ValueError(
+            "panchayats.csv is empty."
+        )
+
+    return df
+
+
+# ============================================================
+# READ PANCHAYATS
+# ============================================================
+
+try:
+
+    panchayat_df = load_panchayats()
+
+except Exception as e:
+
+    st.error(
+        f"Unable to load panchayats.csv: {e}"
+    )
+
+    st.stop()
+
+
+panchayats = panchayat_df.to_dict(
+    orient="records"
+)
+
+
+# ============================================================
+# BLOCK LOCATION
+# ============================================================
+
+block_lat = float(
+    panchayat_df["lat"].mean()
+)
+
+block_lon = float(
+    panchayat_df["lon"].mean()
+)
+
+
+# ============================================================
+# SIDEBAR
+# ============================================================
+
+st.sidebar.header("🌤️ Block-Level Weather")
+
+st.sidebar.write(
+    f"📍 Panchayats Loaded: {len(panchayats)}"
+)
+
+
+# ============================================================
+# FETCH LIVE WEATHER
+# ============================================================
+
+if st.sidebar.button(
+    "🌐 Fetch Live Weather",
+    use_container_width=True
+):
+
+    try:
+
+        weather = get_block_weather(
+            block_lat,
+            block_lon
+        )
+
+        st.session_state["weather_data"] = weather
+
+        st.session_state["live_temperature"] = (
+            weather["current"]["temperature_2m"]
+        )
+
+        st.session_state["live_rain"] = (
+            weather["current"]["rain"]
+        )
+
+        st.sidebar.success(
+            "Live weather fetched."
+        )
+
+    except Exception as e:
+
+        st.sidebar.error(
+            f"Weather API error: {e}"
+        )
+
+
+# ============================================================
+# TEMPERATURE INPUT
+# ============================================================
+
+default_temp = st.session_state.get(
+    "live_temperature",
+    32.0
+)
+
+
+coarse_temp = st.sidebar.number_input(
+    "🌡️ Block Temperature (°C)",
+    min_value=-10.0,
+    max_value=50.0,
+    value=float(default_temp),
+    step=0.5
+)
+
+
+# ============================================================
+# RAINFALL INPUT
+# ============================================================
+
+default_rain = st.session_state.get(
+    "live_rain",
+    20.0
+)
+
+
+coarse_rain = st.sidebar.number_input(
+    "🌧️ Block Rainfall (mm)",
+    min_value=0.0,
+    max_value=500.0,
+    value=float(default_rain),
+    step=1.0
+)
+
+
+# ============================================================
+# GENERATE FORECAST
+# ============================================================
+
+if st.sidebar.button(
+    "🚀 Generate Forecast",
+    use_container_width=True
+):
+
+    forecasts = engine.downscale(
+        coarse_temp=coarse_temp,
+        coarse_rain=coarse_rain,
+        panchayat_features=panchayats
+    )
+
+    st.session_state["forecasts"] = forecasts
+
+    st.session_state["coarse_temp"] = coarse_temp
+
+    st.session_state["coarse_rain"] = coarse_rain
+
+
+# ============================================================
+# PANCHAYAT DATASET
+# ============================================================
+
+st.header("📋 Panchayat Dataset")
+
+st.write(
+    "Panchayat locations and geographical features "
+    "used by the downscaling model."
+)
 
 st.dataframe(
-    display_df,
+    panchayat_df,
     use_container_width=True,
     hide_index=True
 )
 
 
 # ============================================================
-# DOWNLOAD
+# LIVE BLOCK WEATHER
 # ============================================================
 
-csv_data = display_df.to_csv(
-    index=False
-).encode("utf-8")
+if "weather_data" in st.session_state:
 
-st.download_button(
-    "⬇️ Download Panchayat Forecast CSV",
-    data=csv_data,
-    file_name="panchayat_weather_forecast.csv",
-    mime="text/csv",
-    use_container_width=True
-)
+    weather = st.session_state["weather_data"]
+
+    st.header("🌦️ Live Block Weather")
+
+    current = weather["current"]
+
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric(
+        "🌡️ Temperature",
+        f"{current['temperature_2m']:.1f} °C"
+    )
+
+    col2.metric(
+        "🌧️ Rain",
+        f"{current['rain']:.1f} mm"
+    )
+
+    col3.metric(
+        "💧 Precipitation",
+        f"{current['precipitation']:.1f} mm"
+    )
 
 
-# ============================================================
-# 3-DAY FORECAST
-# ============================================================
+    # ========================================================
+    # 3-DAY BLOCK FORECAST
+    # ========================================================
 
-st.markdown(
-    '<div class="section-title">📅 3-Day Block Forecast</div>',
-    unsafe_allow_html=True
-)
-
-try:
+    st.header("📅 3-Day Block Weather Forecast")
 
     daily = weather["daily"]
 
-    dates = daily.get("time", [])
+    block_forecast = []
 
-    max_temp = daily.get(
-        "temperature_2m_max",
-        []
-    )
+    for i in range(len(daily["time"])):
 
-    min_temp = daily.get(
-        "temperature_2m_min",
-        []
-    )
+        block_forecast.append({
+            "Date": daily["time"][i],
 
-    rain = daily.get(
-        "rain_sum",
-        []
-    )
+            "Min Temperature (°C)": round(
+                daily["temperature_2m_min"][i],
+                1
+            ),
 
-    data = []
+            "Max Temperature (°C)": round(
+                daily["temperature_2m_max"][i],
+                1
+            ),
 
-    for i in range(
-        min(3, len(dates))
-    ):
-
-        data.append({
-            "Date": dates[i],
-            "Max Temperature (°C)": max_temp[i],
-            "Min Temperature (°C)": min_temp[i],
-            "Rainfall (mm)": rain[i]
+            "Rainfall (mm)": round(
+                daily["rain_sum"][i],
+                1
+            )
         })
 
-    if data:
 
-        st.dataframe(
-            pd.DataFrame(data),
-            use_container_width=True,
-            hide_index=True
+    block_df = pd.DataFrame(
+        block_forecast
+    )
+
+
+    st.dataframe(
+        block_df,
+        use_container_width=True,
+        hide_index=True
+    )
+
+
+    # ========================================================
+    # 3-DAY PANCHAYAT DOWNSCALING
+    # ========================================================
+
+    st.header("📍 3-Day Panchayat-Level Forecast")
+
+    st.write(
+        "Block-level daily forecasts are downscaled "
+        "for every Panchayat using local geographical features."
+    )
+
+
+    daily_panchayat_forecasts = []
+
+
+    for i in range(len(daily["time"])):
+
+        date = daily["time"][i]
+
+        daily_max_temp = daily[
+            "temperature_2m_max"
+        ][i]
+
+        daily_rain = daily[
+            "rain_sum"
+        ][i]
+
+
+        day_forecasts = engine.downscale(
+            coarse_temp=daily_max_temp,
+            coarse_rain=daily_rain,
+            panchayat_features=panchayats
         )
 
-except Exception as e:
 
-    st.info(
-        f"3-day forecast unavailable: {e}"
+        for forecast in day_forecasts:
+
+            daily_panchayat_forecasts.append({
+                "Date": date,
+
+                "Panchayat": forecast["name"],
+
+                "Temperature (°C)": (
+                    forecast["downscaled_temp"]
+                ),
+
+                "Rainfall (mm)": (
+                    forecast["downscaled_rain"]
+                ),
+
+                "Advisory": (
+                    forecast["advisory"]
+                )
+            })
+
+
+    daily_panchayat_df = pd.DataFrame(
+        daily_panchayat_forecasts
+    )
+
+
+    st.dataframe(
+        daily_panchayat_df,
+        use_container_width=True,
+        hide_index=True
+    )
+
+
+    # ========================================================
+    # PANCHAYAT DETAILS
+    # ========================================================
+
+    st.header("🌾 Panchayat Details")
+
+
+    panchayat_names = [
+        p["name"]
+        for p in panchayats
+    ]
+
+
+    selected_panchayat = st.selectbox(
+        "📍 Select Panchayat",
+        panchayat_names
+    )
+
+
+    selected_forecast = daily_panchayat_df[
+        daily_panchayat_df["Panchayat"]
+        == selected_panchayat
+    ].copy()
+
+
+    average_temperature = selected_forecast[
+        "Temperature (°C)"
+    ].mean()
+
+
+    total_rainfall = selected_forecast[
+        "Rainfall (mm)"
+    ].sum()
+
+
+    col1, col2, col3 = st.columns(3)
+
+
+    col1.metric(
+        "🌡️ Average Temperature",
+        f"{average_temperature:.1f} °C"
+    )
+
+
+    col2.metric(
+        "🌧️ 3-Day Rainfall",
+        f"{total_rainfall:.1f} mm"
+    )
+
+
+    col3.metric(
+        "📍 Panchayat",
+        selected_panchayat
+    )
+
+
+    st.subheader(
+        f"📅 Forecast for {selected_panchayat}"
+    )
+
+
+    st.dataframe(
+        selected_forecast,
+        use_container_width=True,
+        hide_index=True
+    )
+
+
+    # ========================================================
+    # AGRICULTURAL ADVISORY
+    # ========================================================
+
+    if not selected_forecast.empty:
+
+        latest_advisory = selected_forecast.iloc[-1][
+            "Advisory"
+        ]
+
+        st.subheader("🌱 Agricultural Advisory")
+
+        st.info(
+            latest_advisory
+        )
+
+
+# ============================================================
+# CURRENT PANCHAYAT FORECAST
+# ============================================================
+
+if "forecasts" in st.session_state:
+
+    forecasts = st.session_state["forecasts"]
+
+    block_temp = st.session_state["coarse_temp"]
+
+    block_rain = st.session_state["coarse_rain"]
+
+
+    st.header("📊 Current Panchayat-Level Forecast")
+
+
+    # ========================================================
+    # SUMMARY
+    # ========================================================
+
+    average_temperature = sum(
+        f["downscaled_temp"]
+        for f in forecasts
+    ) / len(forecasts)
+
+
+    average_rainfall = sum(
+        f["downscaled_rain"]
+        for f in forecasts
+    ) / len(forecasts)
+
+
+    col1, col2, col3, col4 = st.columns(4)
+
+
+    col1.metric(
+        "🌡️ Block Temperature",
+        f"{block_temp:.1f} °C"
+    )
+
+
+    col2.metric(
+        "🌧️ Block Rainfall",
+        f"{block_rain:.1f} mm"
+    )
+
+
+    col3.metric(
+        "🌡️ Avg Panchayat Temperature",
+        f"{average_temperature:.1f} °C"
+    )
+
+
+    col4.metric(
+        "🌧️ Avg Panchayat Rainfall",
+        f"{average_rainfall:.1f} mm"
+    )
+
+
+    # ========================================================
+    # MAP
+    # ========================================================
+
+    st.header("🗺️ Panchayat Weather Map")
+
+
+    map_center_lat = float(
+        panchayat_df["lat"].mean()
+    )
+
+    map_center_lon = float(
+        panchayat_df["lon"].mean()
+    )
+
+
+    weather_map = folium.Map(
+        location=[
+            map_center_lat,
+            map_center_lon
+        ],
+        zoom_start=11
+    )
+
+
+    for forecast in forecasts:
+
+        popup_html = f"""
+        <div style="font-size:14px">
+
+        <b>{forecast["name"]}</b>
+
+        <br><br>
+
+        Temperature:
+        <b>{forecast["downscaled_temp"]:.2f} °C</b>
+
+        <br>
+
+        Rainfall:
+        <b>{forecast["downscaled_rain"]:.2f} mm</b>
+
+        <br>
+
+        Elevation:
+        <b>{forecast["elevation"]} m</b>
+
+        <br>
+
+        Slope:
+        <b>{forecast["slope"]}°</b>
+
+        <br>
+
+        NDVI:
+        <b>{forecast["ndvi"]}</b>
+
+        <br><br>
+
+        <b>Agricultural Advisory</b>
+
+        <br>
+
+        {forecast["advisory"]}
+
+        </div>
+        """
+
+
+        folium.Marker(
+            location=[
+                forecast["lat"],
+                forecast["lon"]
+            ],
+
+            tooltip=(
+                f"{forecast['name']} | "
+                f"{forecast['downscaled_temp']:.1f} °C | "
+                f"{forecast['downscaled_rain']:.1f} mm"
+            ),
+
+            popup=folium.Popup(
+                popup_html,
+                max_width=350
+            ),
+
+            icon=folium.Icon(
+                icon="info-sign"
+            )
+
+        ).add_to(weather_map)
+
+
+    st_folium(
+        weather_map,
+        width=None,
+        height=500
+    )
+
+
+    # ========================================================
+    # FORECAST TABLE
+    # ========================================================
+
+    st.header("📋 Current Panchayat Forecast")
+
+
+    current_forecast_table = []
+
+
+    for forecast in forecasts:
+
+        current_forecast_table.append({
+            "Panchayat":
+                forecast["name"],
+
+            "Temperature (°C)":
+                round(
+                    forecast["downscaled_temp"],
+                    2
+                ),
+
+            "Rainfall (mm)":
+                round(
+                    forecast["downscaled_rain"],
+                    2
+                ),
+
+            "Advisory":
+                forecast["advisory"]
+        })
+
+
+    current_forecast_df = pd.DataFrame(
+        current_forecast_table
+    )
+
+
+    st.dataframe(
+        current_forecast_df,
+        use_container_width=True,
+        hide_index=True
     )
 
 
 # ============================================================
-# MODEL VALIDATION
+# MODEL PERFORMANCE
 # ============================================================
 
-st.markdown(
-    '<div class="section-title">🤖 ML Model Validation</div>',
-    unsafe_allow_html=True
-)
+st.header("📈 Model Performance")
 
-if model_loaded:
 
-    try:
+metrics = engine.get_metrics()
 
-        metrics = engine.get_metrics()
 
-        temp_metrics = metrics["temperature"]
-
-        rain_metrics = metrics["rainfall"]
-
-        st.markdown("#### 🌡️ Temperature Model")
-
-        cols = st.columns(3)
-
-        with cols[0]:
-            st.metric(
-                "MAE",
-                f"{temp_metrics['MAE']:.3f}"
-            )
-
-        with cols[1]:
-            st.metric(
-                "RMSE",
-                f"{temp_metrics['RMSE']:.3f}"
-            )
-
-        with cols[2]:
-            st.metric(
-                "R²",
-                f"{temp_metrics['R2']:.3f}"
-            )
-
-        st.markdown("#### 🌧️ Rainfall Model")
-
-        cols = st.columns(3)
-
-        with cols[0]:
-            st.metric(
-                "MAE",
-                f"{rain_metrics['MAE']:.3f}"
-            )
-
-        with cols[1]:
-            st.metric(
-                "RMSE",
-                f"{rain_metrics['RMSE']:.3f}"
-            )
-
-        with cols[2]:
-            st.metric(
-                "R²",
-                f"{rain_metrics['R2']:.3f}"
-            )
-
-    except Exception as e:
-
-        st.warning(
-            f"Model metrics unavailable: {e}"
-        )
+col1, col2 = st.columns(2)
 
 
 # ============================================================
-# EXTERNAL VALIDATION
+# TEMPERATURE METRICS
 # ============================================================
 
-st.markdown(
-    '<div class="section-title">📈 External Validation</div>',
-    unsafe_allow_html=True
-)
+with col1:
+
+    st.subheader("🌡️ Temperature Model")
+
+
+    temperature_metrics = pd.DataFrame([
+        {
+            "Metric": "MAE",
+            "Value": round(
+                metrics["temperature"]["MAE"],
+                3
+            )
+        },
+
+        {
+            "Metric": "RMSE",
+            "Value": round(
+                metrics["temperature"]["RMSE"],
+                3
+            )
+        },
+
+        {
+            "Metric": "R²",
+            "Value": round(
+                metrics["temperature"]["R2"],
+                3
+            )
+        }
+    ])
+
+
+    st.dataframe(
+        temperature_metrics,
+        use_container_width=True,
+        hide_index=True
+    )
+
+
+# ============================================================
+# RAINFALL METRICS
+# ============================================================
+
+with col2:
+
+    st.subheader("🌧️ Rainfall Model")
+
+
+    rainfall_metrics = pd.DataFrame([
+        {
+            "Metric": "MAE",
+            "Value": round(
+                metrics["rainfall"]["MAE"],
+                3
+            )
+        },
+
+        {
+            "Metric": "RMSE",
+            "Value": round(
+                metrics["rainfall"]["RMSE"],
+                3
+            )
+        },
+
+        {
+            "Metric": "R²",
+            "Value": round(
+                metrics["rainfall"]["R2"],
+                3
+            )
+        }
+    ])
+
+
+    st.dataframe(
+        rainfall_metrics,
+        use_container_width=True,
+        hide_index=True
+    )
+
+
+# ============================================================
+# FEATURE IMPORTANCE
+# ============================================================
+
+st.header("🔎 ML Feature Importance")
+
 
 st.write(
-    "Upload actual and predicted weather values for independent validation."
+    "Importance of each input variable in the "
+    "Random Forest downscaling models."
 )
 
-validation_file = st.file_uploader(
-    "Upload validation CSV",
-    type=["csv"],
-    key="validation"
-)
 
-if validation_file is not None:
-
-    try:
-
-        validation_df = pd.read_csv(
-            validation_file
-        )
-
-        required = [
-            "actual_temp",
-            "predicted_temp",
-            "actual_rain",
-            "predicted_rain"
-        ]
-
-        missing = [
-            col
-            for col in required
-            if col not in validation_df.columns
-        ]
-
-        if missing:
-
-            st.error(
-                "Missing columns: "
-                + ", ".join(missing)
-            )
-
-        else:
-
-            actual_temp = validation_df.actual_temp
-            predicted_temp = validation_df.predicted_temp
-
-            actual_rain = validation_df.actual_rain
-            predicted_rain = validation_df.predicted_rain
-
-            temp_mae = mean_absolute_error(
-                actual_temp,
-                predicted_temp
-            )
-
-            temp_rmse = np.sqrt(
-                mean_squared_error(
-                    actual_temp,
-                    predicted_temp
-                )
-            )
-
-            temp_r2 = r2_score(
-                actual_temp,
-                predicted_temp
-            )
-
-            rain_mae = mean_absolute_error(
-                actual_rain,
-                predicted_rain
-            )
-
-            rain_rmse = np.sqrt(
-                mean_squared_error(
-                    actual_rain,
-                    predicted_rain
-                )
-            )
-
-            rain_r2 = r2_score(
-                actual_rain,
-                predicted_rain
-            )
-
-            st.markdown("#### 🌡️ Temperature Validation")
-
-            cols = st.columns(3)
-
-            with cols[0]:
-                st.metric(
-                    "MAE",
-                    f"{temp_mae:.3f}"
-                )
-
-            with cols[1]:
-                st.metric(
-                    "RMSE",
-                    f"{temp_rmse:.3f}"
-                )
-
-            with cols[2]:
-                st.metric(
-                    "R²",
-                    f"{temp_r2:.3f}"
-                )
-
-            st.markdown("#### 🌧️ Rainfall Validation")
-
-            cols = st.columns(3)
-
-            with cols[0]:
-                st.metric(
-                    "MAE",
-                    f"{rain_mae:.3f}"
-                )
-
-            with cols[1]:
-                st.metric(
-                    "RMSE",
-                    f"{rain_rmse:.3f}"
-                )
-
-            with cols[2]:
-                st.metric(
-                    "R²",
-                    f"{rain_r2:.3f}"
-                )
-
-    except Exception as e:
-
-        st.error(
-            f"Validation error: {e}"
-        )
+importance = engine.get_feature_importance()
 
 
 # ============================================================
-# CSV FORMAT
+# TEMPERATURE FEATURE IMPORTANCE
 # ============================================================
 
-with st.expander(
-    "📄 Panchayat CSV Format"
-):
+temperature_importance_df = pd.DataFrame({
+    "Feature": list(
+        importance["temperature"].keys()
+    ),
 
-    st.code(
-        """id,name,lat,lon,elevation,slope,ndvi
-P01,North Hill,26.18,91.75,650,22,0.72
-P02,Central Valley,26.15,91.77,120,4,0.45
-P03,South Plains,26.10,91.80,70,2,0.55
-P04,East Ridge,26.14,91.85,480,18,0.68""",
-        language="csv"
+    "Importance": list(
+        importance["temperature"].values()
+    )
+})
+
+
+temperature_importance_df[
+    "Importance"
+] = temperature_importance_df[
+    "Importance"
+].round(4)
+
+
+# ============================================================
+# RAINFALL FEATURE IMPORTANCE
+# ============================================================
+
+rainfall_importance_df = pd.DataFrame({
+    "Feature": list(
+        importance["rainfall"].keys()
+    ),
+
+    "Importance": list(
+        importance["rainfall"].values()
+    )
+})
+
+
+rainfall_importance_df[
+    "Importance"
+] = rainfall_importance_df[
+    "Importance"
+].round(4)
+
+
+col1, col2 = st.columns(2)
+
+
+with col1:
+
+    st.subheader(
+        "🌡️ Temperature Downscaling"
+    )
+
+    st.dataframe(
+        temperature_importance_df.sort_values(
+            "Importance",
+            ascending=False
+        ),
+
+        use_container_width=True,
+
+        hide_index=True
+    )
+
+
+with col2:
+
+    st.subheader(
+        "🌧️ Rainfall Downscaling"
+    )
+
+    st.dataframe(
+        rainfall_importance_df.sort_values(
+            "Importance",
+            ascending=False
+        ),
+
+        use_container_width=True,
+
+        hide_index=True
     )
 
 
 # ============================================================
-# FOOTER
+# INITIAL MESSAGE
 # ============================================================
 
-st.markdown("""
-<div class="footer">
-<b>SIH26074</b> · Panchayat-Level Weather Downscaling
-<br>
-Agriculture · FoodTech · Rural Development
-<br>
-Prototype for Smart India Hackathon 2026
-</div>
-""", unsafe_allow_html=True)
+if "weather_data" not in st.session_state:
+
+    st.info(
+        "Click '🌐 Fetch Live Weather' to retrieve "
+        "current block-level weather."
+    )

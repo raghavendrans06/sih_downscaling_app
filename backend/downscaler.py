@@ -3,11 +3,7 @@ import numpy as np
 
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import (
-    mean_absolute_error,
-    mean_squared_error,
-    r2_score
-)
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 
 class WeatherDownscaler:
@@ -31,16 +27,13 @@ class WeatherDownscaler:
 
         self.train_models()
 
-
-    # ========================================================
+    # ============================================================
     # TRAIN MODELS
-    # ========================================================
+    # ============================================================
 
     def train_models(self):
 
-        df = pd.read_csv(
-            self.training_file
-        )
+        df = pd.read_csv(self.training_file)
 
         required_columns = [
             "coarse_temp",
@@ -59,11 +52,9 @@ class WeatherDownscaler:
         ]
 
         if missing:
-
             raise ValueError(
                 f"Missing columns in training data: {missing}"
             )
-
 
         features = [
             "coarse_temp",
@@ -73,133 +64,91 @@ class WeatherDownscaler:
             "ndvi"
         ]
 
-
         X = df[features]
 
         y_temp = df["fine_temp"]
-
         y_rain = df["fine_rain"]
 
-
-        # ----------------------------------------------------
-        # Temperature train/test split
-        # ----------------------------------------------------
-
         (
-            X_train_temp,
-            X_test_temp,
-            y_train_temp,
-            y_test_temp
+            X_train,
+            X_test,
+            y_temp_train,
+            y_temp_test,
+            y_rain_train,
+            y_rain_test
         ) = train_test_split(
             X,
             y_temp,
-            test_size=0.20,
-            random_state=42
-        )
-
-
-        # ----------------------------------------------------
-        # Rainfall train/test split
-        # ----------------------------------------------------
-
-        (
-            X_train_rain,
-            X_test_rain,
-            y_train_rain,
-            y_test_rain
-        ) = train_test_split(
-            X,
             y_rain,
-            test_size=0.20,
+            test_size=0.2,
             random_state=42
         )
 
-
-        # ----------------------------------------------------
-        # Train models
-        # ----------------------------------------------------
-
+        # Temperature model
         self.temp_model.fit(
-            X_train_temp,
-            y_train_temp
+            X_train,
+            y_temp_train
         )
 
+        # Rainfall model
         self.rain_model.fit(
-            X_train_rain,
-            y_train_rain
+            X_train,
+            y_rain_train
         )
 
+        # ========================================================
+        # TEMPERATURE METRICS
+        # ========================================================
 
-        # ----------------------------------------------------
-        # Predictions
-        # ----------------------------------------------------
-
-        temp_predictions = (
-            self.temp_model.predict(
-                X_test_temp
-            )
+        temp_predictions = self.temp_model.predict(
+            X_test
         )
-
-        rain_predictions = (
-            self.rain_model.predict(
-                X_test_rain
-            )
-        )
-
-
-        # ----------------------------------------------------
-        # Temperature metrics
-        # ----------------------------------------------------
 
         self.temp_metrics = {
-
             "MAE": mean_absolute_error(
-                y_test_temp,
+                y_temp_test,
                 temp_predictions
             ),
-
             "RMSE": np.sqrt(
                 mean_squared_error(
-                    y_test_temp,
+                    y_temp_test,
                     temp_predictions
                 )
             ),
-
             "R2": r2_score(
-                y_test_temp,
+                y_temp_test,
                 temp_predictions
             )
         }
 
+        # ========================================================
+        # RAINFALL METRICS
+        # ========================================================
 
-        # ----------------------------------------------------
-        # Rainfall metrics
-        # ----------------------------------------------------
+        rain_predictions = self.rain_model.predict(
+            X_test
+        )
 
         self.rain_metrics = {
-
             "MAE": mean_absolute_error(
-                y_test_rain,
+                y_rain_test,
                 rain_predictions
             ),
-
             "RMSE": np.sqrt(
                 mean_squared_error(
-                    y_test_rain,
+                    y_rain_test,
                     rain_predictions
                 )
             ),
-
             "R2": r2_score(
-                y_test_rain,
+                y_rain_test,
                 rain_predictions
             )
         }
 
-
-    # ========================================================
+    # ============================================================
     # DOWNSCALE WEATHER
-    # ========================================================
+    # ============================================================
 
     def downscale(
         self,
@@ -209,7 +158,6 @@ class WeatherDownscaler:
     ):
 
         forecasts = []
-
 
         for panchayat in panchayat_features:
 
@@ -223,77 +171,49 @@ class WeatherDownscaler:
                 }
             ])
 
+            downscaled_temp = self.temp_model.predict(
+                features
+            )[0]
 
-            # ------------------------------------------------
-            # Temperature prediction
-            # ------------------------------------------------
+            downscaled_rain = self.rain_model.predict(
+                features
+            )[0]
 
-            downscaled_temp = (
-                self.temp_model.predict(
-                    features
-                )[0]
-            )
-
-
-            # ------------------------------------------------
-            # Rainfall prediction
-            # ------------------------------------------------
-
-            downscaled_rain = (
-                self.rain_model.predict(
-                    features
-                )[0]
-            )
-
-
+            # Rainfall cannot be negative
             downscaled_rain = max(
                 0,
                 downscaled_rain
             )
-
-
-            # ------------------------------------------------
-            # Advisory
-            # ------------------------------------------------
 
             advisory = self.generate_advisory(
                 downscaled_temp,
                 downscaled_rain
             )
 
-
             forecasts.append({
-
                 "id": panchayat["id"],
-
                 "name": panchayat["name"],
-
                 "lat": panchayat["lat"],
-
                 "lon": panchayat["lon"],
-
                 "elevation": panchayat["elevation"],
-
+                "slope": panchayat["slope"],
+                "ndvi": panchayat["ndvi"],
                 "downscaled_temp": round(
                     float(downscaled_temp),
                     2
                 ),
-
                 "downscaled_rain": round(
                     float(downscaled_rain),
                     2
                 ),
-
                 "advisory": advisory
             })
 
-
         return forecasts
 
-
-    # ========================================================
+    # ============================================================
     # AGRICULTURAL ADVISORY
-    # ========================================================
+    # ============================================================
 
     def generate_advisory(
         self,
@@ -309,15 +229,13 @@ class WeatherDownscaler:
                 "and ensure proper field drainage."
             )
 
-
         elif rainfall > 15 and temperature > 30:
 
             return (
                 "Warm and wet conditions. "
-                "Monitor crops for fungal disease "
-                "and inspect fields regularly."
+                "Monitor crops for fungal disease and "
+                "inspect fields regularly."
             )
-
 
         elif temperature > 36:
 
@@ -327,7 +245,6 @@ class WeatherDownscaler:
                 "preferably during early morning."
             )
 
-
         else:
 
             return (
@@ -335,14 +252,46 @@ class WeatherDownscaler:
                 "for normal agricultural activities."
             )
 
-
-    # ========================================================
-    # MODEL METRICS
-    # ========================================================
+    # ============================================================
+    # MODEL PERFORMANCE
+    # ============================================================
 
     def get_metrics(self):
 
         return {
             "temperature": self.temp_metrics,
             "rainfall": self.rain_metrics
+        }
+
+    # ============================================================
+    # FEATURE IMPORTANCE
+    # ============================================================
+
+    def get_feature_importance(self):
+
+        features = [
+            "coarse_temp",
+            "coarse_rain",
+            "elevation",
+            "slope",
+            "ndvi"
+        ]
+
+        temperature_importance = dict(
+            zip(
+                features,
+                self.temp_model.feature_importances_
+            )
+        )
+
+        rainfall_importance = dict(
+            zip(
+                features,
+                self.rain_model.feature_importances_
+            )
+        )
+
+        return {
+            "temperature": temperature_importance,
+            "rainfall": rainfall_importance
         }
