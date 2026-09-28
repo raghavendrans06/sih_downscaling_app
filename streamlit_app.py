@@ -169,10 +169,15 @@ if st.sidebar.button(
             "Live weather fetched."
         )
 
-    except Exception as e:
+    except Exception:
 
-        st.sidebar.error(
-            f"Weather API error: {e}"
+        st.sidebar.warning(
+            "⚠️ Live weather is temporarily unavailable."
+        )
+
+        st.sidebar.info(
+            "You can continue using the Block Temperature "
+            "and Block Rainfall values manually."
         )
 
 
@@ -884,12 +889,13 @@ with col2:
 
 
 # ============================================================
-# INITIAL MESSAGE
+# INITIAL / FALLBACK MESSAGE
 # ============================================================
 
 if "weather_data" not in st.session_state:
 
     st.info(
-        "Click '🌐 Fetch Live Weather' to retrieve "
-        "current block-level weather."
+        "You can fetch live block-level weather or "
+        "enter the Block Temperature and Block Rainfall "
+        "manually, then click '🚀 Generate Forecast'."
     )
