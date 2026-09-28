@@ -1,3 +1,4 @@
+import time
 import requests
 
 
@@ -26,15 +27,51 @@ def get_block_weather(latitude, longitude):
         "forecast_days": 3
     }
 
-    response = requests.get(
-        url,
-        params=params,
-        timeout=15
-    )
+    max_retries = 3
 
-    response.raise_for_status()
+    for attempt in range(max_retries):
 
-    return response.json()
+        try:
+
+            response = requests.get(
+                url,
+                params=params,
+                timeout=15
+            )
+
+            # Open-Meteo rate limit
+            if response.status_code == 429:
+
+                if attempt < max_retries - 1:
+                    wait_time = 5 * (attempt + 1)
+                    time.sleep(wait_time)
+                    continue
+
+                raise Exception(
+                    "Weather service is temporarily rate-limited. "
+                    "Please try again after a few minutes."
+                )
+
+            response.raise_for_status()
+
+            return response.json()
+
+        except requests.exceptions.Timeout:
+
+            if attempt < max_retries - 1:
+                time.sleep(2)
+                continue
+
+            raise Exception(
+                "Weather service timed out. "
+                "Please try again."
+            )
+
+        except requests.exceptions.RequestException as error:
+
+            raise Exception(
+                f"Weather service error: {error}"
+            )
 
 
 if __name__ == "__main__":
